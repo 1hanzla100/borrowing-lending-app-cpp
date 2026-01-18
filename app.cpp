@@ -63,6 +63,30 @@ public:
     }
 };
 
+class LoanSystem {
+public:
+    UserBST users;
+    TransactionList allTransactions;
+
+    void addUser(int id, string name) {
+        users.addUser(id, name);
+    }
+
+    void personSummary(int id) {
+        User* u = users.getUser(id);
+        if (!u) return;
+
+        cout << "Loans:" << endl;
+        u->loans.showAll();
+        cout << "Payments:" << endl;
+        u->payments.showAll();
+    }
+
+    void systemSummary() {
+        allTransactions.showAll();
+    }
+};
+
 int main() {
     return 0;
 }
