@@ -2,7 +2,6 @@
 #include <string>
 using namespace std;
 
-
 class Transaction {
 public:
     int tid;
@@ -14,7 +13,10 @@ public:
     float finePercent;
     bool isReturned;
 
-    Transaction* next;
+    // Separate pointers for separate lists
+    Transaction* nextLoan;
+    Transaction* nextPayment;
+    Transaction* nextAll;
 
     Transaction(int id, int amt, int b, int l, int bd, int rd, float f) {
         tid = id;
@@ -25,19 +27,35 @@ public:
         returnDays = rd;
         finePercent = f;
         isReturned = false;
-        next = NULL;
+
+        nextLoan = nextPayment = nextAll = NULL;
     }
 };
-
 
 class TransactionList {
 public:
     Transaction* head;
+    int type; // 0 = loans, 1 = payments, 2 = all
 
-    TransactionList() { head = NULL; }
+    TransactionList(int t = 2) {
+        head = NULL;
+        type = t;
+    }
+
+    Transaction* next(Transaction* t) {
+        if (type == 0) return t->nextLoan;
+        if (type == 1) return t->nextPayment;
+        return t->nextAll;
+    }
+
+    void setNext(Transaction* t, Transaction* n) {
+        if (type == 0) t->nextLoan = n;
+        else if (type == 1) t->nextPayment = n;
+        else t->nextAll = n;
+    }
 
     void add(Transaction* t) {
-        t->next = head;
+        setNext(t, head);
         head = t;
     }
 
@@ -45,21 +63,39 @@ public:
         Transaction* temp = head;
         while (temp) {
             if (temp->tid == id) return temp;
-            temp = temp->next;
+            temp = next(temp);
         }
         return NULL;
+    }
+
+    void remove(int id) {
+        Transaction* curr = head;
+        Transaction* prev = NULL;
+
+        while (curr) {
+            if (curr->tid == id) {
+                if (!prev)
+                    head = next(curr);
+                else
+                    setNext(prev, next(curr));
+                return;
+            }
+            prev = curr;
+            curr = next(curr);
+        }
     }
 
     void showAll() {
         Transaction* temp = head;
         while (temp) {
-            cout << "Transaction ID: " << temp->tid
-                 << " Amount: " << temp->amount << endl;
-            temp = temp->next;
+            if (!temp->isReturned) {
+                cout << "Transaction ID: " << temp->tid
+                     << " Amount: " << temp->amount << endl;
+            }
+            temp = next(temp);
         }
     }
 };
-
 
 class User {
 public:
@@ -73,14 +109,13 @@ public:
     User* left;
     User* right;
 
-    User(int i, string n) {
+    User(int i, string n) : loans(0), payments(1) {
         id = i;
         name = n;
         active = true;
         left = right = NULL;
     }
 };
-
 
 class UserBST {
 public:
@@ -98,7 +133,8 @@ public:
     }
 
     void addUser(int id, string name) {
-        root = insert(root, id, name);
+        if (!getUser(id))
+            root = insert(root, id, name);
     }
 
     User* search(User* node, int id) {
@@ -129,11 +165,18 @@ public:
     UserBST users;
     TransactionList allTransactions;
 
+    LoanSystem() : allTransactions(2) {}
+
     void addUser(int id, string name) {
         users.addUser(id, name);
     }
 
     void borrow(int tid, int amt, int b, int l, int day, int r, float f) {
+        if (allTransactions.find(tid)) {
+            cout << "Transaction ID already exists" << endl;
+            return;
+        }
+
         User* borrower = users.getUser(b);
         User* lender = users.getUser(l);
 
@@ -155,9 +198,9 @@ public:
             return;
         }
 
-        int total = t->amount;
+        float total = t->amount;
         if (day > t->borrowDay + t->returnDays) {
-            total += total * (t->finePercent / 100);
+            total += total * (t->finePercent / 100.0f);
         }
 
         t->isReturned = true;
@@ -166,11 +209,16 @@ public:
 
     void transferLoan(int tid, int newBorrower) {
         Transaction* t = allTransactions.find(tid);
-        User* u = users.getUser(newBorrower);
-        if (!t || !u) return;
+        if (!t || t->isReturned) return;
 
+        User* oldB = users.getUser(t->borrower);
+        User* newB = users.getUser(newBorrower);
+
+        if (!newB || !newB->active) return;
+
+        oldB->loans.remove(tid);
         t->borrower = newBorrower;
-        u->loans.add(t);
+        newB->loans.add(t);
     }
 
     void personSummary(int id) {
@@ -190,7 +238,7 @@ public:
                 (t->borrower == p2 && t->lender == p1)) {
                 cout << "Transaction ID: " << t->tid << endl;
             }
-            t = t->next;
+            t = t->nextAll;
         }
     }
 
